@@ -185,35 +185,6 @@ static const int celt_hq_test[][4] = {
       {MODE_CELT_ONLY, OPUS_BANDWIDTH_FULLBAND,      120, 2},
 };
 
-#if 0 /* This is a hack that replaces the normal encoder/decoder with the multistream version */
-#define OpusEncoder OpusMSEncoder
-#define OpusDecoder OpusMSDecoder
-#define opus_encode opus_multistream_encode
-#define opus_decode opus_multistream_decode
-#define opus_encoder_ctl opus_multistream_encoder_ctl
-#define opus_decoder_ctl opus_multistream_decoder_ctl
-#define opus_encoder_create ms_opus_encoder_create
-#define opus_decoder_create ms_opus_decoder_create
-#define opus_encoder_destroy opus_multistream_encoder_destroy
-#define opus_decoder_destroy opus_multistream_decoder_destroy
-
-static OpusEncoder *ms_opus_encoder_create(opus_int32 Fs, int channels, int application, int *error)
-{
-   int streams, coupled_streams;
-   unsigned char mapping[256];
-   return (OpusEncoder *)opus_multistream_surround_encoder_create(Fs, channels, 1, &streams, &coupled_streams, mapping, application, error);
-}
-static OpusDecoder *ms_opus_decoder_create(opus_int32 Fs, int channels, int *error)
-{
-   int streams;
-   int coupled_streams;
-   unsigned char mapping[256]={0,1};
-   streams = 1;
-   coupled_streams = channels==2;
-   return (OpusDecoder *)opus_multistream_decoder_create(Fs, channels, streams, coupled_streams, mapping, error);
-}
-#endif
-
 int main(int argc, char *argv[])
 {
     int err;
@@ -241,7 +212,7 @@ int main(int argc, char *argv[])
     opus_int32 skip=0;
     int stop=0;
     short *in, *out;
-    int application=OPUS_APPLICATION_AUDIO;
+    int application=OPUS_APPLICATION_VOIP;
     double bits=0.0, bits_max=0.0, bits_act=0.0, bits2=0.0, nrg;
     double tot_samples=0;
     opus_uint64 tot_in, tot_out;
@@ -294,40 +265,17 @@ int main(int argc, char *argv[])
        return EXIT_FAILURE;
     }
 
-    if (!decode_only)
-    {
-       if (strcmp(argv[args], "voip")==0)
-          application = OPUS_APPLICATION_VOIP;
-       else if (strcmp(argv[args], "restricted-lowdelay")==0)
-          application = OPUS_APPLICATION_RESTRICTED_LOWDELAY;
-       else if (strcmp(argv[args], "audio")!=0) {
-          fprintf(stderr, "unknown application: %s\n", argv[args]);
-          print_usage(argv);
-          return EXIT_FAILURE;
-       }
-       args++;
-    }
-    sampling_rate = (opus_int32)atol(argv[args]);
+	sampling_rate = 16000;
+    //sampling_rate = (opus_int32)atol(argv[args]);
     args++;
 
-    if (sampling_rate != 8000 && sampling_rate != 12000
-     && sampling_rate != 16000 && sampling_rate != 24000
-     && sampling_rate != 48000)
-    {
-        fprintf(stderr, "Supported sampling rates are 8000, 12000, "
-                "16000, 24000 and 48000.\n");
-        return EXIT_FAILURE;
-    }
+    
     frame_size = sampling_rate/50;
 
-    channels = atoi(argv[args]);
+	channels = 1;
+    //channels = atoi(argv[args]);
     args++;
 
-    if (channels < 1 || channels > 2)
-    {
-        fprintf(stderr, "Opus_demo supports only 1 or 2 channels.\n");
-        return EXIT_FAILURE;
-    }
 
     if (!decode_only)
     {
@@ -346,11 +294,7 @@ int main(int argc, char *argv[])
 
     while( args < argc - 2 ) {
         /* process command line options */
-        if( strcmp( argv[ args ], "-cbr" ) == 0 ) {
-            check_encoder_option(decode_only, "-cbr");
-            use_vbr = 0;
-            args++;
-        } else if( strcmp( argv[ args ], "-bandwidth" ) == 0 ) {
+        if( strcmp( argv[ args ], "-bandwidth" ) == 0 ) {
             check_encoder_option(decode_only, "-bandwidth");
             if (strcmp(argv[ args + 1 ], "NB")==0)
                 bandwidth = OPUS_BANDWIDTH_NARROWBAND;
@@ -396,87 +340,10 @@ int main(int argc, char *argv[])
                 return EXIT_FAILURE;
             }
             args += 2;
-        } else if( strcmp( argv[ args ], "-max_payload" ) == 0 ) {
-            check_encoder_option(decode_only, "-max_payload");
-            max_payload_bytes = atoi( argv[ args + 1 ] );
-            args += 2;
         } else if( strcmp( argv[ args ], "-complexity" ) == 0 ) {
             check_encoder_option(decode_only, "-complexity");
             complexity = atoi( argv[ args + 1 ] );
             args += 2;
-        } else if( strcmp( argv[ args ], "-inbandfec" ) == 0 ) {
-            use_inbandfec = 1;
-            args++;
-        } else if( strcmp( argv[ args ], "-forcemono" ) == 0 ) {
-            check_encoder_option(decode_only, "-forcemono");
-            forcechannels = 1;
-            args++;
-        } else if( strcmp( argv[ args ], "-cvbr" ) == 0 ) {
-            check_encoder_option(decode_only, "-cvbr");
-            cvbr = 1;
-            args++;
-        } else if( strcmp( argv[ args ], "-delayed-decision" ) == 0 ) {
-            check_encoder_option(decode_only, "-delayed-decision");
-            delayed_decision = 1;
-            args++;
-        } else if( strcmp( argv[ args ], "-dtx") == 0 ) {
-            check_encoder_option(decode_only, "-dtx");
-            use_dtx = 1;
-            args++;
-        } else if( strcmp( argv[ args ], "-loss" ) == 0 ) {
-            packet_loss_perc = atoi( argv[ args + 1 ] );
-            args += 2;
-        } else if( strcmp( argv[ args ], "-sweep" ) == 0 ) {
-            check_encoder_option(decode_only, "-sweep");
-            sweep_bps = atoi( argv[ args + 1 ] );
-            args += 2;
-        } else if( strcmp( argv[ args ], "-random_framesize" ) == 0 ) {
-            check_encoder_option(decode_only, "-random_framesize");
-            random_framesize = 1;
-            args++;
-        } else if( strcmp( argv[ args ], "-sweep_max" ) == 0 ) {
-            check_encoder_option(decode_only, "-sweep_max");
-            sweep_max = atoi( argv[ args + 1 ] );
-            args += 2;
-        } else if( strcmp( argv[ args ], "-random_fec" ) == 0 ) {
-            check_encoder_option(decode_only, "-random_fec");
-            random_fec = 1;
-            args++;
-        } else if( strcmp( argv[ args ], "-silk8k_test" ) == 0 ) {
-            check_encoder_option(decode_only, "-silk8k_test");
-            mode_list = silk8_test;
-            nb_modes_in_list = 8;
-            args++;
-        } else if( strcmp( argv[ args ], "-silk12k_test" ) == 0 ) {
-            check_encoder_option(decode_only, "-silk12k_test");
-            mode_list = silk12_test;
-            nb_modes_in_list = 8;
-            args++;
-        } else if( strcmp( argv[ args ], "-silk16k_test" ) == 0 ) {
-            check_encoder_option(decode_only, "-silk16k_test");
-            mode_list = silk16_test;
-            nb_modes_in_list = 8;
-            args++;
-        } else if( strcmp( argv[ args ], "-hybrid24k_test" ) == 0 ) {
-            check_encoder_option(decode_only, "-hybrid24k_test");
-            mode_list = hybrid24_test;
-            nb_modes_in_list = 4;
-            args++;
-        } else if( strcmp( argv[ args ], "-hybrid48k_test" ) == 0 ) {
-            check_encoder_option(decode_only, "-hybrid48k_test");
-            mode_list = hybrid48_test;
-            nb_modes_in_list = 4;
-            args++;
-        } else if( strcmp( argv[ args ], "-celt_test" ) == 0 ) {
-            check_encoder_option(decode_only, "-celt_test");
-            mode_list = celt_test;
-            nb_modes_in_list = 32;
-            args++;
-        } else if( strcmp( argv[ args ], "-celt_hq_test" ) == 0 ) {
-            check_encoder_option(decode_only, "-celt_hq_test");
-            mode_list = celt_hq_test;
-            nb_modes_in_list = 4;
-            args++;
         } else {
             printf( "Error: unrecognized setting: %s\n\n", argv[ args ] );
             print_usage( argv );
@@ -486,13 +353,6 @@ int main(int argc, char *argv[])
 
     if (sweep_max)
        sweep_min = bitrate_bps;
-
-    if (max_payload_bytes < 0 || max_payload_bytes > MAX_PACKET)
-    {
-        fprintf (stderr, "max_payload_bytes must be between 0 and %d\n",
-                          MAX_PACKET);
-        return EXIT_FAILURE;
-    }
 
     inFile = argv[argc-2];
     fin = fopen(inFile, "rb");
@@ -533,12 +393,9 @@ int main(int argc, char *argv[])
        }
        opus_encoder_ctl(enc, OPUS_SET_BITRATE(bitrate_bps));
        opus_encoder_ctl(enc, OPUS_SET_BANDWIDTH(bandwidth));
-       opus_encoder_ctl(enc, OPUS_SET_VBR(use_vbr));
-       opus_encoder_ctl(enc, OPUS_SET_VBR_CONSTRAINT(cvbr));
+       opus_encoder_ctl(enc, OPUS_SET_VBR(1));
        opus_encoder_ctl(enc, OPUS_SET_COMPLEXITY(complexity));
-       opus_encoder_ctl(enc, OPUS_SET_INBAND_FEC(use_inbandfec));
        opus_encoder_ctl(enc, OPUS_SET_FORCE_CHANNELS(forcechannels));
-       opus_encoder_ctl(enc, OPUS_SET_DTX(use_dtx));
        opus_encoder_ctl(enc, OPUS_SET_PACKET_LOSS_PERC(packet_loss_perc));
 
        opus_encoder_ctl(enc, OPUS_GET_LOOKAHEAD(&skip));
@@ -597,9 +454,7 @@ int main(int argc, char *argv[])
     /* We need to allocate for 16-bit PCM data, but we store it as unsigned char. */
     fbytes = (unsigned char*)malloc(max_frame_size*channels*sizeof(short));
     data[0] = (unsigned char*)calloc(max_payload_bytes,sizeof(unsigned char));
-    if ( use_inbandfec ) {
-        data[1] = (unsigned char*)calloc(max_payload_bytes,sizeof(unsigned char));
-    }
+
     if(delayed_decision)
     {
        if (frame_size==sampling_rate/400)
@@ -623,37 +478,13 @@ int main(int argc, char *argv[])
        opus_encoder_ctl(enc, OPUS_SET_EXPERT_FRAME_DURATION(variable_duration));
        frame_size = 2*48000;
     }
+	////////////////////////////////////////////////////////////////////////////////////////
     while (!stop)
     {
         if (delayed_celt)
         {
             frame_size = newsize;
             delayed_celt = 0;
-        } else if (random_framesize && rand()%20==0)
-        {
-            newsize = rand()%6;
-            switch(newsize)
-            {
-            case 0: newsize=sampling_rate/400; break;
-            case 1: newsize=sampling_rate/200; break;
-            case 2: newsize=sampling_rate/100; break;
-            case 3: newsize=sampling_rate/50; break;
-            case 4: newsize=sampling_rate/25; break;
-            case 5: newsize=3*sampling_rate/50; break;
-            }
-            while (newsize < sampling_rate/25 && bitrate_bps-abs(sweep_bps) <= 3*12*sampling_rate/newsize)
-               newsize*=2;
-            if (newsize < sampling_rate/100 && frame_size >= sampling_rate/100)
-            {
-                opus_encoder_ctl(enc, OPUS_SET_FORCE_MODE(MODE_CELT_ONLY));
-                delayed_celt=1;
-            } else {
-                frame_size = newsize;
-            }
-        }
-        if (random_fec && rand()%30==0)
-        {
-           opus_encoder_ctl(enc, OPUS_SET_INBAND_FEC(rand()%4==0));
         }
         if (decode_only)
         {
@@ -741,18 +572,6 @@ int main(int argc, char *argv[])
             }
         }
 
-#if 0 /* This is for testing the padding code, do not enable by default */
-        if (len[toggle]<1275)
-        {
-           int new_len = len[toggle]+rand()%(max_payload_bytes-len[toggle]);
-           if ((err = opus_packet_pad(data[toggle], len[toggle], new_len)) != OPUS_OK)
-           {
-              fprintf(stderr, "padding failed: %s\n", opus_strerror(err));
-              return EXIT_FAILURE;
-           }
-           len[toggle] = new_len;
-        }
-#endif
         if (encode_only)
         {
             unsigned char int_field[4];
